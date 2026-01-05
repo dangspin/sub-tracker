@@ -22,6 +22,22 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const totalMonthlyCost = subscriptions.reduce((sum, sub) => {
+    const cycleLower = sub.cycle.toLowerCase();
+    const monthlyPrice =
+      cycleLower === "yearly"
+        ? sub.price / 12
+        : cycleLower === "monthly"
+        ? sub.price
+        : sub.price;
+
+    return sum + monthlyPrice;
+  }, 0);
+
+  const formattedTotalMonthlyCost = totalMonthlyCost.toFixed(2);
+  const totalColorClass =
+    totalMonthlyCost > 100 ? "text-red-500" : "text-emerald-500";
+
   async function fetchSubscriptions() {
     try {
       setLoading(true);
@@ -83,6 +99,18 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-50 py-10 px-4 font-sans dark:bg-black">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+        <section className="rounded-2xl bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-700 p-6 shadow-sm ring-1 ring-zinc-900">
+          <p className="text-sm font-medium uppercase tracking-wide text-zinc-400">
+            Total Monthly Cost
+          </p>
+          <p className={`mt-2 text-4xl font-bold ${totalColorClass}`}>
+            ¥{formattedTotalMonthlyCost}
+          </p>
+          <p className="mt-2 text-xs text-zinc-400">
+            按照每月计算：年费已换算为每月费用。
+          </p>
+        </section>
+
         <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
             订阅管理
