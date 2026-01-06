@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Edit, Trash2 } from "lucide-react";
 
 type Subscription = {
   id: number;
@@ -21,6 +22,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const totalMonthlyCost = subscriptions.reduce((sum, sub) => {
     const cycleLower = sub.cycle.toLowerCase();
@@ -59,28 +61,42 @@ export default function Home() {
     fetchSubscriptions();
   }, []);
 
+  function formatDateForInput(dateString: string) {
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toISOString().slice(0, 10);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
 
     try {
-      const res = await fetch("/api/subscriptions", {
-        method: "POST",
+      const payload = {
+        name,
+        price: Number(price),
+        cycle,
+        startDate,
+      };
+
+      const url =
+        editingId === null
+          ? "/api/subscriptions"
+          : `/api/subscriptions/${editingId}`;
+      const method = editingId === null ? "POST" : "PATCH";
+
+      const res = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          name,
-          price: Number(price),
-          cycle,
-          startDate,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "创建订阅失败");
+        throw new Error(body.error || (editingId === null ? "创建订阅失败" : "更新订阅失败"));
       }
 
       await fetchSubscriptions();
@@ -89,6 +105,41 @@ export default function Home() {
       setPrice("");
       setCycle("monthly");
       setStartDate("");
+      setEditingId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "未知错误");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function handleEdit(sub: Subscription) {
+    setEditingId(sub.id);
+    setName(sub.name);
+    setPrice(String(sub.price));
+    setCycle(sub.cycle.toLowerCase());
+    setStartDate(formatDateForInput(sub.startDate));
+  }
+
+  async function handleDelete(id: number) {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/subscriptions/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "删除订阅失败");
+      }
+      await fetchSubscriptions();
+      if (editingId === id) {
+        setEditingId(null);
+        setName("");
+        setPrice("");
+        setCycle("monthly");
+        setStartDate("");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "未知错误");
     } finally {
@@ -177,17 +228,44 @@ export default function Home() {
             </div>
 
             <div className="md:col-span-2 flex items-center justify-end gap-3">
+              {editingId !== null && (
+                <span className="mr-auto text-xs text-amber-600 dark:text-amber-400">
+                  正在编辑 ID 为 {editingId} 的订阅
+                </span>
+              )}
               {error && (
                 <p className="text-sm text-red-500">
                   {error}
                 </p>
+              )}
+              {editingId !== null && (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => {
+                    setEditingId(null);
+                    setName("");
+                    setPrice("");
+                    setCycle("monthly");
+                    setStartDate("");
+                  }}
+                  className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  取消编辑
+                </button>
               )}
               <button
                 type="submit"
                 disabled={submitting}
                 className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
               >
-                {submitting ? "提交中..." : "添加订阅"}
+                {submitting
+                  ? editingId === null
+                    ? "提交中..."
+                    : "更新中..."
+                  : editingId === null
+                  ? "添加订阅"
+                  : "更新订阅"}
               </button>
             </div>
           </form>
@@ -216,13 +294,33 @@ export default function Home() {
                   key={sub.id}
                   className="flex flex-col justify-between rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800"
                 >
-                  <div>
-                    <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
-                      {sub.name}
-                    </h3>
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      {sub.cycle === "monthly" ? "每月订阅" : "每年订阅"}
-                    </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                        {sub.name}
+                      </h3>
+                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        {sub.cycle === "monthly" ? "每月订阅" : "每年订阅"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(sub)}
+                        className="rounded-full p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                        aria-label="编辑订阅"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(sub.id)}
+                        className="rounded-full p-1 text-zinc-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/40 dark:hover:text-red-400"
+                        aria-label="删除订阅"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-4 flex items-baseline justify-between">
                     <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
